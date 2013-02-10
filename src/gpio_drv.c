@@ -16,18 +16,14 @@
 #include "gpio_drv.h"
 #include "gpio_reg.h"
 
-static volatile unsigned int *gpio_addr = 0;
+//static volatile unsigned int *gpio_addr = 0;
+volatile unsigned *gpio_addr;
 
 #define PAGE_SIZE (4*1024)
 #define BLOCK_SIZE (4*1024)
 
-#define GPIO_IN(g)                                          \
-    (*(gpio_addr + ((g) / (10))) &= ~(7 < (((g)%10) * 3)) )
-
-#define GPIO_OUT(g) do {                                         \
-        GPIO_IN(g);                                              \
-        (*(gpio_addr + ((g)/ (10))) |= (1 < ((g)%10 * 3)) );     \
-    } while(0)
+#define GPIO_IN(g) *(gpio_addr+((g)/10)) &= ~(7<<(((g)%10)*3))
+#define GPIO_OUT(g) *(gpio_addr+((g)/10)) |=  (1<<(((g)%10)*3))
 
 #define GPIO_SET *(gpio_addr + 7)
 #define GPIO_CLR *(gpio_addr + 10)
@@ -53,12 +49,12 @@ void gpio_init(void)
 #endif
 
     if((mem_fd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
-        printf("Cannot open\n");
+        printf("Cannot open /dev/mem \n");
         exit(-1);
     }
 
 #ifndef NO_MALLOC
-    if((gpio_mem = malloc(PAGE_SIZE + (BLOCK_SIZE -1))) == NULL) {
+    if((gpio_mem = malloc(BLOCK_SIZE + (PAGE_SIZE -1))) == NULL) {
         printf("Cannot allocate\n");
         exit(-1);
     }
@@ -84,7 +80,7 @@ void gpio_init(void)
         GPIO_BASE);
 #endif /* NO_MALLOC */
 
-    if((long)gpio_map < 0) {
+    if((int)gpio_map < 0) {
         printf("mmap error\n");
         exit(-1);
     }
@@ -99,6 +95,7 @@ void gpio_inout(int port_no, GPIO_INOUT inout)
         GPIO_IN(port_no);
         break;
     case E_GPIO_OUT:
+        GPIO_IN(port_no);
         GPIO_OUT(port_no);
         break;
     default:
@@ -110,10 +107,10 @@ void gpio_inout(int port_no, GPIO_INOUT inout)
 void gpio_write(int port_no, int data)
 {
     if(!(IS_VALID_PORT(port_no) && gpio_addr)) return;
-    if(data > 0) {
-        GPIO_SET = 1 << (port_no);
-    } else {
+    if(data == 0) {
         GPIO_CLR = 1 << (port_no);
+    } else {
+        GPIO_SET = 1 << (port_no);
     }
 }
 
