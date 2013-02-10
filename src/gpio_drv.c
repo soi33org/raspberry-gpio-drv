@@ -27,56 +27,73 @@ static volatile unsigned int *gpio_addr = 0;
 #define GPIO_OUT(g) do {                                         \
         GPIO_IN(g);                                              \
         (*(gpio_addr + ((g)/ (10))) |= (1 < ((g)%10 * 3)) );     \
-        printf("%08x\n", (*(gpio_addr + ((g)/ (10))) | (1 < ((g)%10 * 3)) )); \
     } while(0)
 
 #define GPIO_SET *(gpio_addr + 7)
 #define GPIO_CLR *(gpio_addr + 10)
 #define GPIO_GET *(gpio_addr + 13)
 
+#define MAX_PORT (25)
+static char valid_port[] =
+{
+    1,1,0,0,  0,0,0,1,
+    1,1,1,1,  0,0,1,1,
+    0,1,1,0,  0,1,1,1,
+    1,1
+};
+
+#define IS_VALID_PORT(port) ((port < 0 || 25 < port) ? 0 : (int)valid_port[port] )
 
 void gpio_init(void)
 {
     int mem_fd;
-    char *gpio_mem, *gpio_map;
+    char *gpio_map;
+#ifndef NO_MALLOC
+    char *gpio_mem;
+#endif
 
     if((mem_fd = open("/dev/mem", O_RDWR | O_SYNC)) < 0) {
         printf("Cannot open\n");
         exit(-1);
     }
 
+#ifndef NO_MALLOC
     if((gpio_mem = malloc(PAGE_SIZE + (BLOCK_SIZE -1))) == NULL) {
         printf("Cannot allocate\n");
         exit(-1);
     }
     
-    if((unsigned long)gpio_mem % PAGE_SIZE) {
-        gpio_mem += (PAGE_SIZE - (unsigned long)gpio_mem % PAGE_SIZE);
+    if((unsigned int)gpio_mem % PAGE_SIZE) {
+        gpio_mem += (PAGE_SIZE - (unsigned int)gpio_mem % PAGE_SIZE);
     }
     
     gpio_map = (char *)mmap(
-//        (caddr_t)gpio_mem,
-        (caddr_t)NULL,
+        (caddr_t)gpio_mem,
         BLOCK_SIZE,
         PROT_READ | PROT_WRITE,
-        MAP_SHARED /*| MAP_FIXED*/,
+        MAP_SHARED | MAP_FIXED,
         mem_fd,
         GPIO_BASE);
-    
+#else
+    gpio_map = (char *)mmap(
+        NULL,
+        BLOCK_SIZE,
+        PROT_READ | PROT_WRITE,
+        MAP_SHARED,
+        mem_fd,
+        GPIO_BASE);
+#endif /* NO_MALLOC */
+
     if((long)gpio_map < 0) {
         printf("mmap error\n");
         exit(-1);
     }
-
-    printf("GPIO_BASE addr = %08x \n", GPIO_BASE);
-    printf("gpir_mem addr = %08x \n", gpio_mem);
-    printf("gpio_map addr = %08x \n", gpio_map);
-    
     gpio_addr = (volatile unsigned *)gpio_map;
 }
 
 void gpio_inout(int port_no, GPIO_INOUT inout)
 {
+    if(!(IS_VALID_PORT(port_no) && gpio_addr)) return;
     switch(inout) {
     case E_GPIO_IN:
         GPIO_IN(port_no);
@@ -92,6 +109,7 @@ void gpio_inout(int port_no, GPIO_INOUT inout)
 
 void gpio_write(int port_no, int data)
 {
+    if(!(IS_VALID_PORT(port_no) && gpio_addr)) return;
     if(data > 0) {
         GPIO_SET = 1 << (port_no);
     } else {
@@ -101,6 +119,7 @@ void gpio_write(int port_no, int data)
 
 int gpio_read(int port_no)
 {
+    if(!(IS_VALID_PORT(port_no) && gpio_addr)) return 0;
     return (GPIO_GET & (1 << port_no) ? 1 : 0);
 }
 
