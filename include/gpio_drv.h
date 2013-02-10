@@ -9,9 +9,14 @@
 #ifndef __GPIO_DRV_H_
 #define __GPIO_DRV_H_
 
+typedef enum {
+    E_GPIO_IN = 0,
+    E_GPIO_OUT
+}GPIO_INOUT;
+
 void gpio_init(void);
-void gpio_destroy(void);
-
-
+void gpio_inout(int port_no, GPIO_INOUT);
+void gpio_write(int port_no, int data);
+int gpio_read(int port_no);
 
 #endif /* __GPIO_DRV_H_ */
